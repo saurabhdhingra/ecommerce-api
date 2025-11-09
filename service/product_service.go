@@ -1,9 +1,13 @@
+package service
 
+import (
+	"ecommerce-api/domain"
+)
 
-func (s *serviceImpl) CreateProduct(product *Product) error {
+func (s *ServiceImpl) CreateProduct(product *domain.Product) error {
 	return s.productRepo.Create(product)
 }
 
-func (s *serviceImpl) GetProducts(query string) ([]Product, error) {
+func (s *ServiceImpl) GetProducts(query string) ([]domain.Product, error) {
 	return s.productRepo.FindAll(query)
 }

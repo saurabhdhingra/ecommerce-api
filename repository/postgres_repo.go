@@ -1,7 +1,8 @@
 package repository
 
 import (
-	main "ecommerce-api"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log"
 
@@ -15,29 +16,41 @@ type PostgresRepository struct {
 	DB *gorm.DB
 }
 
-func NewInMemoryRepository(cfg main.Config) *PostgresRepository {
+type Config struct {
+	DBHost     string
+	DBUser     string
+	DBPassword string
+	DBName     string
+	DBPort     string
+	AdminUser  string
+	AdminPass  string
+}
+
+func NewPostgresRepository(cfg Config) (*PostgresRepository, error) {
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Asia/Shanghai",
 		cfg.DBHost, cfg.DBUser, cfg.DBPassword, cfg.DBName, cfg.DBPort)
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
-	
+
 	// AutoMigrate tables (creates tables if they don't exist)
 	err = db.AutoMigrate(&domain.User{}, &domain.Product{}, &domain.Cart{}, &domain.CartItem{})
 	if err != nil {
-		log.Fatalf("Failed to run migrations: %v", err)
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 	log.Println("Database connection successful and migrations complete.")
 
 	// Create admin user if it doesn't exist (Initial setup logic)
 	var admin domain.User
 	if err := db.Where("username = ?", cfg.AdminUser).First(&admin).Error; err == gorm.ErrRecordNotFound {
+		// Hash the admin password
+		hashedPassword := hashPassword(cfg.AdminPass)
 		admin = domain.User{
 			Username: cfg.AdminUser,
-			Password: cfg.AdminPass, // NOTE: In real app, this MUST be hashed!
-			IsAdmin: true,
+			Password: hashedPassword,
+			IsAdmin:  true,
 		}
 		if err := db.Create(&admin).Error; err != nil {
 			log.Printf("Failed to create admin user: %v", err)
@@ -46,6 +59,12 @@ func NewInMemoryRepository(cfg main.Config) *PostgresRepository {
 		}
 	}
 
+	return &PostgresRepository{DB: db}, nil
+}
 
-	return &PostgresRepository{DB: db}
+// hashPassword is a simple utility (use bcrypt in production!)
+func hashPassword(password string) string {
+	h := sha256.New()
+	h.Write([]byte(password))
+	return hex.EncodeToString(h.Sum(nil))
 }

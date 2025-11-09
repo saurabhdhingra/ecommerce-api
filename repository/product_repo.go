@@ -1,17 +1,20 @@
 package repository
 
-
 import (
 	"gorm.io/gorm"
-	
+
 	"ecommerce-api/domain"
 )
 
-func (r *PostgresRepository) CreateProduct(product *domain.Product) error {
+type ProductRepo struct {
+	*PostgresRepository
+}
+
+func (r *ProductRepo) Create(product *domain.Product) error {
 	return r.DB.Create(product).Error
 }
 
-func (r *PostgresRepository) FindAll(query string) ([]domain.Product, error) {
+func (r *ProductRepo) FindAll(query string) ([]domain.Product, error) {
 	var products []domain.Product
 	db := r.DB
 	if query != "" {
@@ -21,7 +24,7 @@ func (r *PostgresRepository) FindAll(query string) ([]domain.Product, error) {
 	return products, err
 }
 
-func (r *PostgresRepository) FindByID(id uint) (*domain.Product, error) {
+func (r *ProductRepo) FindByID(id uint) (*domain.Product, error) {
 	var product domain.Product
 	err := r.DB.First(&product, id).Error
 	if err == gorm.ErrRecordNotFound {
@@ -30,11 +33,11 @@ func (r *PostgresRepository) FindByID(id uint) (*domain.Product, error) {
 	return &product, err
 }
 
-func (r *PostgresRepository) Update(product *domain.Product) error {
+func (r *ProductRepo) Update(product *domain.Product) error {
 	return r.DB.Save(product).Error
 }
 
-func (r *PostgresRepository) Delete(id uint) error {
+func (r *ProductRepo) Delete(id uint) error {
 	err := r.DB.Delete(&domain.Product{}, id).Error
 	if err != nil {
 		return err

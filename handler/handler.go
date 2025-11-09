@@ -5,12 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"ecommerce-api/domain"
+	"ecommerce-api/service"
 )
 
 // APIHandler holds the business logic and utility services required by the handlers.
 type APIHandler struct {
-	Service    ECommerceService
-	JWTService JWTService
+	Service    service.ECommerceService
+	JWTService service.JWTService
 }
 
 // Utility function to respond with JSON
@@ -28,12 +31,12 @@ func RespondJSON(w http.ResponseWriter, status int, payload interface{}) {
 
 // Utility function to respond with JSON error
 func RespondError(w http.ResponseWriter, status int, message string) {
-	respondJSON(w, status, map[string]string{"error": message})
+	RespondJSON(w, status, map[string]string{"error": message})
 }
 
-// getUserClaims is a helper to retrieve user data from the request context
-func GetUserClaims(r *http.Request) *Claims {
-	claims, ok := r.Context().Value(UserContextKey).(*Claims)
+// GetUserClaims is a helper to retrieve user data from the request context
+func GetUserClaims(r *http.Request) *domain.Claims {
+	claims, ok := r.Context().Value(service.UserContextKey).(*domain.Claims)
 	if !ok || claims == nil {
 		return nil // Should be caught by middleware, but safety check
 	}
@@ -45,23 +48,23 @@ func GetUserClaims(r *http.Request) *Claims {
 // --- ADMIN PRODUCT HANDLERS ---
 
 func (h *APIHandler) CreateProductHandler(w http.ResponseWriter, r *http.Request) {
-	var product Product
+	var product domain.Product
 	if err := json.NewDecoder(r.Body).Decode(&product); err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid request payload")
+		RespondError(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
 
 	// Business validation in service, but initial checks here
 	if product.Name == "" || product.PriceCents <= 0 || product.Inventory < 0 {
-		respondError(w, http.StatusBadRequest, "Product name, price, and inventory must be valid")
+		RespondError(w, http.StatusBadRequest, "Product name, price, and inventory must be valid")
 		return
 	}
 
 	if err := h.Service.CreateProduct(&product); err != nil {
-		respondError(w, http.StatusInternalServerError, "Could not create product")
+		RespondError(w, http.StatusInternalServerError, "Could not create product")
 		return
 	}
-	respondJSON(w, http.StatusCreated, product)
+	RespondJSON(w, http.StatusCreated, product)
 }
 
 // --- PUBLIC PRODUCT HANDLERS ---
@@ -70,7 +73,7 @@ func (h *APIHandler) GetProductsHandler(w http.ResponseWriter, r *http.Request) 
 	query := r.URL.Query().Get("q")
 	products, err := h.Service.GetProducts(query)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to retrieve products")
+		RespondError(w, http.StatusInternalServerError, "Failed to retrieve products")
 		return
 	}
 
@@ -85,15 +88,15 @@ func (h *APIHandler) GetProductsHandler(w http.ResponseWriter, r *http.Request) 
 			"inventory":   p.Inventory,
 		}
 	}
-	respondJSON(w, http.StatusOK, displayProducts)
+	RespondJSON(w, http.StatusOK, displayProducts)
 }
 
 // --- CART HANDLERS (Authenticated) ---
 
 func (h *APIHandler) AddToCartHandler(w http.ResponseWriter, r *http.Request) {
-	claims := getUserClaims(r)
+	claims := GetUserClaims(r)
 	if claims == nil {
-		respondError(w, http.StatusUnauthorized, "User context missing")
+		RespondError(w, http.StatusUnauthorized, "User context missing")
 		return
 	}
 
@@ -102,33 +105,33 @@ func (h *APIHandler) AddToCartHandler(w http.ResponseWriter, r *http.Request) {
 		Quantity  int  `json:"quantity"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Quantity <= 0 {
-		respondError(w, http.StatusBadRequest, "Invalid product ID or quantity")
+		RespondError(w, http.StatusBadRequest, "Invalid product ID or quantity")
 		return
 	}
 
 	cart, err := h.Service.AddToCart(claims.UserID, req.ProductID, req.Quantity)
 	if err != nil {
-		if errors.Is(err, ErrInsufficientInv) || errors.Is(err, ErrNotFound) {
-			respondError(w, http.StatusBadRequest, err.Error())
+		if errors.Is(err, domain.ErrInsufficientInv) || errors.Is(err, domain.ErrNotFound) {
+			RespondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		respondError(w, http.StatusInternalServerError, "Failed to add item to cart")
+		RespondError(w, http.StatusInternalServerError, "Failed to add item to cart")
 		return
 	}
 
-	respondJSON(w, http.StatusOK, cart)
+	RespondJSON(w, http.StatusOK, cart)
 }
 
 func (h *APIHandler) ViewCartHandler(w http.ResponseWriter, r *http.Request) {
-	claims := getUserClaims(r)
+	claims := GetUserClaims(r)
 	if claims == nil {
-		respondError(w, http.StatusUnauthorized, "User context missing")
+		RespondError(w, http.StatusUnauthorized, "User context missing")
 		return
 	}
 
 	cart, err := h.Service.ViewCart(claims.UserID)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to retrieve cart")
+		RespondError(w, http.StatusInternalServerError, "Failed to retrieve cart")
 		return
 	}
 
@@ -143,26 +146,26 @@ func (h *APIHandler) ViewCartHandler(w http.ResponseWriter, r *http.Request) {
 		"total_usd":   fmt.Sprintf("%.2f", float64(totalCents)/100.0),
 		"total_cents": totalCents,
 	}
-	respondJSON(w, http.StatusOK, response)
+	RespondJSON(w, http.StatusOK, response)
 }
 
 func (h *APIHandler) CheckoutHandler(w http.ResponseWriter, r *http.Request) {
-	claims := getUserClaims(r)
+	claims := GetUserClaims(r)
 	if claims == nil {
-		respondError(w, http.StatusUnauthorized, "User context missing")
+		RespondError(w, http.StatusUnauthorized, "User context missing")
 		return
 	}
 
 	result, err := h.Service.Checkout(claims.UserID)
 	if err != nil {
-		if errors.Is(err, ErrCartEmpty) || errors.Is(err, ErrInsufficientInv) {
-			respondError(w, http.StatusBadRequest, err.Error())
+		if errors.Is(err, domain.ErrCartEmpty) || errors.Is(err, domain.ErrInsufficientInv) {
+			RespondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		// Generic internal server error for payment gateway issues
-		respondError(w, http.StatusInternalServerError, "Checkout failed due to internal error.")
+		RespondError(w, http.StatusInternalServerError, "Checkout failed due to internal error.")
 		return
 	}
 
-	respondJSON(w, http.StatusOK, result)
+	RespondJSON(w, http.StatusOK, result)
 }

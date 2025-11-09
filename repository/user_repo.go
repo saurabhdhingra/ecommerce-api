@@ -2,16 +2,19 @@ package repository
 
 import (
 	"gorm.io/gorm"
-	
+
 	"ecommerce-api/domain"
 )
 
+type UserRepo struct {
+	*PostgresRepository
+}
 
-func (r *PostgresRepository) CreateUser(user *domain.User) error {
+func (r *UserRepo) Create(user *domain.User) error {
 	return r.DB.Create(user).Error
 }
 
-func (r *PostgresRepository) FindByUsername(username string) (*domain.User, error) {
+func (r *UserRepo) FindByUsername(username string) (*domain.User, error) {
 	var user domain.User
 	err := r.DB.Where("username = ?", username).First(&user).Error
 	if err == gorm.ErrRecordNotFound {
@@ -20,7 +23,7 @@ func (r *PostgresRepository) FindByUsername(username string) (*domain.User, erro
 	return &user, err
 }
 
-func (r *PostgresRepository) FindUserByID(id uint) (*domain.User, error) {
+func (r *UserRepo) FindByID(id uint) (*domain.User, error) {
 	var user domain.User
 	err := r.DB.First(&user, id).Error
 	if err == gorm.ErrRecordNotFound {
