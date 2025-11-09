@@ -2,6 +2,8 @@
 
 A RESTful e-commerce API built with Go, featuring user authentication, product management, shopping cart functionality, and Stripe payment integration.
 
+<img width="2048" height="1511" alt="image" src="https://github.com/user-attachments/assets/2b762db5-c1ff-4124-94c0-9730d5c1a599" />
+
 ## Features
 
 - **User Authentication**: Signup and login with JWT-based authentication
