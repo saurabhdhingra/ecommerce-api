@@ -1,15 +1,13 @@
 package domain
 
 import (
-	"time"
+	"gorm.io/gorm"
 )
 
 type Product struct {
-	ID			string		`json:"id"`
-	Name		string		`json:"name"`
-	Description	string		`json:"description"`
-	Price		float64		`json:"price"`
-	Inventory	int			`json:"inventory"`
-	IsActive	bool		`json:"isActive"`
-	CreatedAt	time.Time	`json:"createdAt"`
+	gorm.Model
+	Name        string  `gorm:"not null"`
+	Description string
+	PriceCents  int64   `gorm:"not null"` // Price stored in smallest currency unit (cents)
+	Inventory   int     `gorm:"default:0"`
 }
